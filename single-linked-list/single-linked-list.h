@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <string>
 #include <utility>
-#include <stdexcept>
 
 template <typename Type>
 class SingleLinkedList {
@@ -95,11 +94,11 @@ public:
     }
 
     [[nodiscard]] ConstIterator begin() const noexcept {
-        return ConstIterator(head_);
+        return cbegin();
     }
 
     [[nodiscard]] ConstIterator end() const noexcept {
-        return ConstIterator(nullptr);
+        return cend();
     }
 
     [[nodiscard]] ConstIterator cbegin() const noexcept {
@@ -155,14 +154,7 @@ public:
     }
 
     SingleLinkedList(const SingleLinkedList& other) : head_(nullptr), size_(0) {
-        Node* current = other.head_;
-        Node** last_ptr = &head_;
-
-        while (current != nullptr) {
-            *last_ptr = new Node(current->value, nullptr);
-            last_ptr = &((*last_ptr)->next_node);
-            current = current->next_node;
-        }
+        CloneFrom(other);
         size_ = other.size_;
     }
 
@@ -177,6 +169,7 @@ public:
     void swap(SingleLinkedList& other) noexcept {
         std::swap(head_, other.head_);
         std::swap(size_, other.size_);
+        std::swap(before_head_.next_node, other.before_head_.next_node);
     }
 
     [[nodiscard]] Iterator before_begin() noexcept {
@@ -192,9 +185,7 @@ public:
     }
 
     Iterator InsertAfter(ConstIterator pos, const Type& value) {
-        if (pos.node_ == nullptr) {
-            throw std::logic_error("Невозможно вставить после конца итератора");
-        }
+        assert(pos.node_ != nullptr);
         Node* new_node = new Node(value, pos.node_->next_node);
         pos.node_->next_node = new_node;
         if (pos.node_ == &before_head_) {
@@ -205,18 +196,15 @@ public:
     }
 
     void PopFront() noexcept {
-        if (head_ != nullptr) {
-            Node* old_head = head_;
-            head_ = head_->next_node;
-            delete old_head;
-            --size_;
-        }
+        assert(head_ != nullptr);
+        Node* old_head = head_;
+        head_ = head_->next_node;
+        delete old_head;
+        --size_;
     }
 
     Iterator EraseAfter(ConstIterator pos) noexcept {
-        if (pos.node_ == nullptr || pos.node_->next_node == nullptr) {
-            return end();
-        }
+        assert(pos.node_ != nullptr && pos.node_->next_node != nullptr && size_ > 0);
         Node* target_node = pos.node_->next_node;
         pos.node_->next_node = target_node->next_node;
         if (pos.node_ == &before_head_) {
@@ -228,6 +216,15 @@ public:
     }
 
 private:
+    void CloneFrom(const SingleLinkedList& other) {
+        Node** last_ptr = &head_;
+        Node* current = other.head_;
+        while (current != nullptr) {
+            *last_ptr = new Node(current->value);
+            last_ptr = &((*last_ptr)->next_node);
+            current = current->next_node;
+        }
+    }
     Node* head_ = nullptr;
     size_t size_ = 0;
     Node before_head_;
@@ -240,8 +237,15 @@ void swap(SingleLinkedList<Type>& lhs, SingleLinkedList<Type>& rhs) noexcept {
 
 template <typename Type>
 bool operator==(const SingleLinkedList<Type>& lhs, const SingleLinkedList<Type>& rhs) {
-    return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+    if (&lhs == &rhs) {
+        return true;
+    }
+    if (lhs.GetSize() != rhs.GetSize()) {
+        return false;
+    }
+    return std::equal(lhs.begin(), lhs.end(), rhs.begin());
 }
+
 
 template <typename Type>
 bool operator!=(const SingleLinkedList<Type>& lhs, const SingleLinkedList<Type>& rhs) {
