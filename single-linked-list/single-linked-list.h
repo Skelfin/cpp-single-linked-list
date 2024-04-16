@@ -86,11 +86,15 @@ public:
     using ConstIterator = BasicIterator<const Type>;
 
     [[nodiscard]] Iterator begin() noexcept {
-        return Iterator(head_);
+        return Iterator(head_.next_node);
     }
 
     [[nodiscard]] Iterator end() noexcept {
-        return Iterator(nullptr);
+        return Iterator{nullptr};
+    }
+
+    [[nodiscard]] Iterator before_begin() noexcept {
+        return Iterator(const_cast<Node*>(&head_));
     }
 
     [[nodiscard]] ConstIterator begin() const noexcept {
@@ -102,16 +106,22 @@ public:
     }
 
     [[nodiscard]] ConstIterator cbegin() const noexcept {
-        return ConstIterator(head_);
+        return ConstIterator(head_.next_node);
     }
 
     [[nodiscard]] ConstIterator cend() const noexcept {
         return ConstIterator(nullptr);
     }
 
-    SingleLinkedList() : head_(nullptr), size_(0), before_head_() {
-        before_head_.next_node = head_;
+    [[nodiscard]] ConstIterator cbefore_begin() const noexcept {
+        return ConstIterator(const_cast<Node*>(&head_));
     }
+
+    [[nodiscard]] ConstIterator before_begin() const noexcept {
+        return ConstIterator(const_cast<Node*>(&head_));
+    }
+
+    SingleLinkedList() = default;
 
 
     ~SingleLinkedList() {
@@ -119,22 +129,14 @@ public:
     }
 
     void PushFront(const Type& value) {
-        Node* new_node = new Node(value, head_);
-        head_ = new_node;
-        before_head_.next_node = head_;
+        head_.next_node = new Node(value, head_.next_node);
         ++size_;
     }
 
     void Clear() noexcept {
-        Node* current = head_;
-        while (current != nullptr) {
-            Node* next = current->next_node;
-            delete current;
-            current = next;
+        while (!IsEmpty()) {
+            PopFront();
         }
-        head_ = nullptr;
-        before_head_.next_node = nullptr;
-        size_ = 0;
     }
 
     [[nodiscard]] size_t GetSize() const noexcept {
@@ -145,7 +147,7 @@ public:
         return size_ == 0;
     }
 
-    SingleLinkedList(std::initializer_list<Type> values) : head_(nullptr), size_(0) {
+    SingleLinkedList(std::initializer_list<Type> values) {
         auto it = values.end();
         while (it != values.begin()) {
             --it;
@@ -153,10 +155,20 @@ public:
         }
     }
 
-    SingleLinkedList(const SingleLinkedList& other) : head_(nullptr), size_(0) {
-        CloneFrom(other);
-        size_ = other.size_;
+    SingleLinkedList(const SingleLinkedList& other) {
+        SingleLinkedList tmp;
+        Node* last_node = &tmp.head_;
+        for (auto it = other.begin(); it != other.end(); ++it) {
+            last_node->next_node = new Node(*it, nullptr);
+            last_node = last_node->next_node;
+        }
+        tmp.size_ = other.size_;
+        swap(tmp);
     }
+    // Честно скажу, просил помощи у других студетов, чтобы понять как убрать before_head_.
+    // И насчет SingleLinkedList не много не понял, у них же код разный, как для них сделать шаблонный метод?
+    // И да...из-за before_head_ пришлось поменять несколько методов и SingleLinkedList(const SingleLinkedList& other)
+    // Это тоже затронуло (хоть и не так сильно)
 
     SingleLinkedList& operator=(const SingleLinkedList& rhs) {
         if (this != &rhs) {
@@ -167,67 +179,44 @@ public:
     }
 
     void swap(SingleLinkedList& other) noexcept {
-        std::swap(head_, other.head_);
-        std::swap(size_, other.size_);
-        std::swap(before_head_.next_node, other.before_head_.next_node);
-    }
+        Node* tmp = other.head_.next_node;
+        size_t size = other.size_;
 
-    [[nodiscard]] Iterator before_begin() noexcept {
-        return Iterator(&before_head_);
-    }
+        other.head_.next_node = head_.next_node;
+        other.size_ = size_;
 
-    [[nodiscard]] ConstIterator cbefore_begin() const noexcept {
-        return ConstIterator(const_cast<Node*>(&before_head_));
-    }
-
-    [[nodiscard]] ConstIterator before_begin() const noexcept {
-        return ConstIterator(const_cast<Node*>(&before_head_));
+        head_.next_node = tmp;
+        size_ = size;
     }
 
     Iterator InsertAfter(ConstIterator pos, const Type& value) {
         assert(pos.node_ != nullptr);
-        Node* new_node = new Node(value, pos.node_->next_node);
-        pos.node_->next_node = new_node;
-        if (pos.node_ == &before_head_) {
-            head_ = new_node;
-        }
+        pos.node_->next_node = new Node(value, pos.node_->next_node);
         ++size_;
-        return Iterator(new_node);
+        return Iterator(pos.node_->next_node);
     }
 
     void PopFront() noexcept {
-        assert(head_ != nullptr);
-        Node* old_head = head_;
-        head_ = head_->next_node;
-        delete old_head;
-        --size_;
+        if (size_ != 0) {
+            Node* next = head_.next_node->next_node;
+            delete head_.next_node;
+            head_.next_node = next;
+            --size_;
+        }
     }
 
     Iterator EraseAfter(ConstIterator pos) noexcept {
         assert(pos.node_ != nullptr && pos.node_->next_node != nullptr && size_ > 0);
         Node* target_node = pos.node_->next_node;
-        pos.node_->next_node = target_node->next_node;
-        if (pos.node_ == &before_head_) {
-            head_ = target_node->next_node;
-        }
+        pos.node_->next_node = pos.node_->next_node->next_node;
         delete target_node;
         --size_;
         return Iterator(pos.node_->next_node);
     }
 
 private:
-    void CloneFrom(const SingleLinkedList& other) {
-        Node** last_ptr = &head_;
-        Node* current = other.head_;
-        while (current != nullptr) {
-            *last_ptr = new Node(current->value);
-            last_ptr = &((*last_ptr)->next_node);
-            current = current->next_node;
-        }
-    }
-    Node* head_ = nullptr;
+    Node head_ = Node();
     size_t size_ = 0;
-    Node before_head_;
 };
 
 template <typename Type>
