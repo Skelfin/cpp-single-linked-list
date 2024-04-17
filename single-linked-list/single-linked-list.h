@@ -147,28 +147,29 @@ public:
         return size_ == 0;
     }
 
-    SingleLinkedList(std::initializer_list<Type> values) {
-        auto it = values.end();
-        while (it != values.begin()) {
-            --it;
-            PushFront(*it);
+    template<typename Iterator>
+    void ConstructList(Iterator begin, Iterator end) {
+        SingleLinkedList new_list;
+        Node* node = &new_list.head_;
+        for (auto it = begin; it != end; ++it) {
+            node->next_node = new Node(*it, nullptr);
+            node = node->next_node;
         }
+        swap(new_list);
     }
 
-    SingleLinkedList(const SingleLinkedList& other) {
-        SingleLinkedList tmp;
-        Node* last_node = &tmp.head_;
-        for (auto it = other.begin(); it != other.end(); ++it) {
-            last_node->next_node = new Node(*it, nullptr);
-            last_node = last_node->next_node;
-        }
-        tmp.size_ = other.size_;
-        swap(tmp);
+    SingleLinkedList(std::initializer_list<Type> values) {
+        ConstructList(values.begin(), values.end());
+        size_ = values.size();
     }
-    // Честно скажу, просил помощи у других студетов, чтобы понять как убрать before_head_.
-    // И насчет SingleLinkedList не много не понял, у них же код разный, как для них сделать шаблонный метод?
-    // И да...из-за before_head_ пришлось поменять несколько методов и SingleLinkedList(const SingleLinkedList& other)
-    // Это тоже затронуло (хоть и не так сильно)
+
+
+    SingleLinkedList(const SingleLinkedList& other) {
+        ConstructList(other.begin(), other.end());
+        size_ = other.size_;
+    }
+
+    // Надеюсь теперь я правильно понял логику)
 
     SingleLinkedList& operator=(const SingleLinkedList& rhs) {
         if (this != &rhs) {
@@ -179,14 +180,8 @@ public:
     }
 
     void swap(SingleLinkedList& other) noexcept {
-        Node* tmp = other.head_.next_node;
-        size_t size = other.size_;
-
-        other.head_.next_node = head_.next_node;
-        other.size_ = size_;
-
-        head_.next_node = tmp;
-        size_ = size;
+        std::swap(head_.next_node, other.head_.next_node);
+        std::swap(size_, other.size_);
     }
 
     Iterator InsertAfter(ConstIterator pos, const Type& value) {
